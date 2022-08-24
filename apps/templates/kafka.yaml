@@ -46,7 +46,7 @@ spec:
 
   template:
     metadata:
-      name: '{{cluster}}-kafka'
+      name: '{{`{{cluster}}`}}-kafka'
     spec:
       project: "default"
       source:
@@ -57,6 +57,6 @@ spec:
             - values.yaml
         chart: kafka  
       destination:
-        server: '{{url}}'
+        server: '{{`{{url}}`}}'
         namespace: kafka
       syncPolicy: {}       
