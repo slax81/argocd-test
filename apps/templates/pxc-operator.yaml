@@ -35,6 +35,6 @@ spec:
             - values.yaml
         chart: pxc-operator  
       destination:
-        server: '{{url}}'
+        server: '{{`{{url}}`}}'
         namespace: percona
       syncPolicy: {}       
