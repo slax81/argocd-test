@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: pxc-operator
+  namespace: argocd
+spec:
+  #goTemplate: true
+  generators:
+  - list:
+      elements:
+        - cluster: 'in-cluster'
+          url: 'https://kubernetes.default.svc'
+      template:
+        metadata: {}
+        spec:
+          project: "default"
+          source:
+            repoURL: 'https://percona.github.io/percona-helm-charts/'
+            helm:
+              parameters:
+                - name: replicaCount
+                  value: '2'                
+          destination: {}
+
+  template:
+    metadata:
+      name: 'pxc-operator'
+    spec:
+      project: "default"
+      source:
+        repoURL: 'https://percona.github.io/percona-helm-charts/'
+        targetRevision: 1.11.1
+        helm:            
+          valueFiles:
+            - values.yaml
+        chart: pxc-operator  
+      destination:
+        server: '{{url}}'
+        namespace: percona
+      syncPolicy: {}       

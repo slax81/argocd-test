@@ -1,0 +1,62 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kafka
+  namespace: argocd
+spec:
+  #goTemplate: true
+  generators:
+  - list:
+      elements:
+        - cluster: 'in-cluster'
+          url: 'https://kubernetes.default.svc'
+      template:
+        metadata: {}
+        spec:
+          project: "default"
+          source:
+            repoURL: 'https://charts.bitnami.com/bitnami'
+            helm:
+              parameters:
+                - name: persistence.storageClass
+                  value: local-path
+                - name: zookeeper.persistence.storageClass
+                  value: local-path
+                - name: global.storageClass
+                  value: local-path
+                - name: deleteTopicEnable
+                  value: 'true'
+                - name: metrics.kafka.enabled
+                  value: 'true'
+                - name: metrics.serviceMonitor.enabled
+                  value: 'true'
+                - name: metrics.serviceMonitor.namespace
+                  value: monitoring
+                - name: metrics.serviceMonitor.labels
+                  value: 'release: prometheus'
+                - name: autoCreateTopicsEnable
+                  value: 'false'
+                - name: volumePermissions.enabled
+                  value: 'true'
+                - name: metrics.serviceMonitor.interval
+                  value: 10s
+                - name: metrics.serviceMonitor.scrapeTimeout
+                  value: 10s                    
+          destination: {}
+
+  template:
+    metadata:
+      name: '{{cluster}}-kafka'
+    spec:
+      project: "default"
+      source:
+        repoURL: 'https://charts.bitnami.com/bitnami'
+        targetRevision: 18.0.0
+        helm:            
+          valueFiles:
+            - values.yaml
+        chart: kafka  
+      destination:
+        server: '{{url}}'
+        namespace: kafka
+      syncPolicy: {}       
