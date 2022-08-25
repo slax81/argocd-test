@@ -1,0 +1,92 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: loki
+  namespace: argocd
+spec:
+  #goTemplate: true
+  generators:
+  - list:
+      elements:
+        - cluster: 'in-cluster'
+          url: 'https://kubernetes.default.svc'
+      template:
+        metadata: {}
+        spec:
+          project: "default"
+          source:
+            repoURL: 'https://grafana.github.io/helm-charts'
+            helm:
+              parameters:
+                - name: persistence.enabled
+                  value: 'true'
+                - name: persistence.storageClassName
+                  value: local-path           
+          destination: {}
+
+  template:
+    metadata:
+      name: 'loki'
+    spec:
+      project: "default"
+      source:
+        repoURL: 'https://grafana.github.io/helm-charts'
+        targetRevision: 2.12.2
+        helm:            
+          valueFiles:
+            - values.yaml
+          values: |+
+            serviceMonitor:
+              enabled: true
+              interval: "10s"
+              additionalLabels: {}
+              annotations: {release: prometheus}
+              labels: {release: prometheus, app: loki}
+              scrapeTimeout: 10s
+              path: /metrics
+              prometheusRule:
+                enabled: true
+                additionalLabels: {}
+                namespace: monitoring
+                rules:
+                #  Some examples from https://awesome-prometheus-alerts.grep.to/rules.html#loki
+                  - alert: LokiProcessTooManyRestarts
+                    expr: changes(process_start_time_seconds{job=~"loki"}[15m]) > 2
+                    for: 0m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: Loki process too many restarts (instance {{ $labels.instance }})
+                      description: "A loki process had too many restarts (target {{ $labels.instance }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+                  - alert: LokiRequestErrors
+                    expr: 100 * sum(rate(loki_request_duration_seconds_count{status_code=~"5.."}[1m])) by (namespace, job, route) / sum(rate(loki_request_duration_seconds_count[1m])) by (namespace, job, route) > 10
+                    for: 15m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: Loki request errors (instance {{ $labels.instance }})
+                      description: "The {{ $labels.job }} and {{ $labels.route }} are experiencing errors\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+                  - alert: LokiRequestPanic
+                    expr: sum(increase(loki_panic_total[10m])) by (namespace, job) > 0
+                    for: 5m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: Loki request panic (instance {{ $labels.instance }})
+                      description: "The {{ $labels.job }} is experiencing {{ printf \"%.2f\" $value }}% increase of panics\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+                  - alert: LokiRequestLatency
+                    expr: (histogram_quantile(0.99, sum(rate(loki_request_duration_seconds_bucket{route!~"(?i).*tail.*"}[5m])) by (le)))  > 1
+                    for: 5m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: Loki request latency (instance {{ $labels.instance }})
+                      description: "The {{ $labels.job }} {{ $labels.route }} is experiencing {{ printf \"%.2f\" $value }}s 99th percentile latency\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        chart: loki
+      destination:
+        server: '{{`{{url}}`}}'
+        namespace: monitoring
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true      
