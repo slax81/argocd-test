@@ -20,8 +20,6 @@ spec:
               parameters:
                 - name: global.storageClass
                   value: local-path
-                - name: global.commonAnnotations
-                  value: 'linkerd.io/inject: enabled'
                 - name: master.persistence.storageClass
                   value: local-path
                 - name: replica.persistence.storageClass
