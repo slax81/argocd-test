@@ -102,6 +102,7 @@ spec:
                       summary: Redis&trade; instance {{ "{{ $labels.instance }}" }} has evicted keys
                       description: |
                         Redis&trade; instance {{ "{{ $labels.instance }}" }} has evicted {{ "{{ $value }}" }} keys in the last 5 minutes.
+                        
         chart: redis
       destination:
         server: '{{`{{url}}`}}'
