@@ -20,6 +20,8 @@ spec:
               parameters:
                 - name: global.storageClass
                   value: local-path
+		- name: common.names.fullname
+		  value: redis
                 - name: master.persistence.storageClass
                   value: local-path
                 - name: replica.persistence.storageClass
