@@ -1,0 +1,114 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: redis
+  namespace: argocd
+spec:
+  #goTemplate: true
+  generators:
+  - list:
+      elements:
+        - cluster: 'in-cluster'
+          url: 'https://kubernetes.default.svc'
+      template:
+        metadata: {}
+        spec:
+          project: "default"
+          source:
+            repoURL: 'https://charts.bitnami.com/bitnami'
+            helm:
+              parameters:
+                - name: global.storageClass
+                  value: local-path
+                - name: global.commonAnnotations
+                  value: 'linkerd.io/inject: enabled'
+                - name: master.persistence.storageClass
+                  value: local-path
+                - name: replica.persistence.storageClass
+                  value: local-path
+                - name: auth.enabled
+                  value: 'false'
+                - name: auth.sentinel
+                  value: 'false'
+                - name: replica.replicaCount
+                  value: '1'
+                - name: sentinel.persistence.storageClass
+                  value: local-path
+                - name: metrics.enabled
+                  value: 'true'
+                - name: metrics.serviceMonitor.enabled
+                  value: 'true'
+                - name: metrics.serviceMonitor.namespace
+                  value: monitoring
+                - name: metrics.prometheusRule.namespace
+                  value: monitoring
+                - name: metrics.prometheusRule.enabled
+                  value: 'true'                  
+          destination: {}
+
+  template:
+    metadata:
+      name: 'redis'
+    spec:
+      project: "default"
+      source:
+        repoURL: 'https://charts.bitnami.com/bitnami'
+        targetRevision: 17.0.5
+        helm:            
+          valueFiles:
+            - values.yaml
+          values: |
+            metrics:
+              serviceMonitor:
+                additionalLabels: {app: redis, release: prometheus}
+              prometheusRule:
+                ## @param metrics.prometheusRule.enabled Create a custom prometheusRule Resource for scraping metrics using PrometheusOperator
+                ##
+                enabled: true
+                ## @param metrics.prometheusRule.namespace The namespace in which the prometheusRule will be created
+                ##
+                namespace: "redis"
+                ## @param metrics.prometheusRule.additionalLabels Additional labels for the prometheusRule
+                ##
+                additionalLabels: {}
+                ## @param metrics.prometheusRule.rules Custom Prometheus rules
+                ## e.g:
+                rules:
+                  - alert: RedisDown
+                    expr: redis_up{service="{{ template "common.names.fullname" . }}-metrics"} == 0
+                    for: 2m
+                    labels:
+                      severity: error
+                    annotations:
+                      summary: Redis&trade; instance {{ "{{ $labels.instance }}" }} down
+                      description: Redis&trade; instance {{ "{{ $labels.instance }}" }} is down
+                  - alert: RedisMemoryHigh
+                    expr: >
+                      redis_memory_used_bytes{service="{{ template "common.names.fullname" . }}-metrics"} * 100
+                      /
+                      redis_memory_max_bytes{service="{{ template "common.names.fullname" . }}-metrics"}
+                      > 90
+                    for: 2m
+                    labels:
+                      severity: error
+                    annotations:
+                      summary: Redis&trade; instance {{ "{{ $labels.instance }}" }} is using too much memory
+                      description: |
+                        Redis&trade; instance {{ "{{ $labels.instance }}" }} is using {{ "{{ $value }}" }}% of its available memory.
+                  - alert: RedisKeyEviction
+                    expr: |
+                      increase(redis_evicted_keys_total{service="{{ template "common.names.fullname" . }}-metrics"}[5m]) > 0
+                    for: 1s
+                    labels:
+                      severity: error
+                    annotations:
+                      summary: Redis&trade; instance {{ "{{ $labels.instance }}" }} has evicted keys
+                      description: |
+                        Redis&trade; instance {{ "{{ $labels.instance }}" }} has evicted {{ "{{ $value }}" }} keys in the last 5 minutes.
+        chart: redis
+      destination:
+        server: '{{`{{url}}`}}'
+        namespace: redis
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true      
